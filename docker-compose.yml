@@ -1,0 +1,29 @@
+services:
+  ds2aabb:
+    build: .
+    container_name: ds2aabb
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - ds2aabb-data:/app/data
+    environment:
+      - PORT=3000
+      - DATA_DIR=/app/data
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - API_KEYS=${API_KEYS:-}
+      - API_KEY=${API_KEY:-}
+      - DS_TOKEN=${DS_TOKEN:-}
+      - DS_TOKENS=${DS_TOKENS:-}
+      - DS_ACCOUNTS=${DS_ACCOUNTS:-}
+      - DS_ACCOUNTS_EXTENDED=${DS_ACCOUNTS_EXTENDED:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - HTTP_PROXY=${HTTP_PROXY:-}
+    env_file:
+      - path: .env
+        required: false
+    stop_grace_period: 10s
+
+volumes:
+  ds2aabb-data:
+    driver: local

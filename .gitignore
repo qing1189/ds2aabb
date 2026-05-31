@@ -1,0 +1,4 @@
+node_modules/
+.env
+.pm2/
+sha3_wasm_bg.wasm

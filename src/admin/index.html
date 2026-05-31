@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DS Gateway 管理面板</title>
+<style>
+:root{--bg:#1a1a2e;--surface:#16213e;--border:#0f3460;--text:#e0e0e0;--text-dim:#8892a0;--green:#00e676;--yellow:#ffd600;--red:#ff1744;--accent:#00b0ff}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh}
+.container{max-width:960px;margin:0 auto;padding:20px}
+header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:20px}
+header h1{font-size:1.3em;color:var(--accent)}
+header .meta{font-size:0.85em;color:var(--text-dim)}
+.controls{display:flex;align-items:center;gap:8px}
+.controls select,.controls button{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 10px;font-size:0.85em;cursor:pointer}
+.controls button:hover{border-color:var(--accent)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px 20px;margin-bottom:16px}
+.card h2{font-size:1.05em;margin-bottom:12px;color:var(--accent)}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.stat-item{background:var(--bg);border-radius:6px;padding:12px;text-align:center}
+.stat-item .label{font-size:0.75em;color:var(--text-dim);margin-bottom:4px}
+.stat-item .value{font-size:1.4em;font-weight:700}
+.status-ok{color:var(--green)}.status-warn{color:var(--yellow)}.status-err{color:var(--red)}
+table{width:100%;border-collapse:collapse;font-size:0.88em}
+th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)}
+th{color:var(--text-dim);font-weight:600;font-size:0.8em;text-transform:uppercase;letter-spacing:0.5px}
+td{font-family:'SF Mono','Consolas',monospace;font-size:0.85em}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.dot-green{background:var(--green)}.dot-yellow{background:var(--yellow)}.dot-red{background:var(--red)}
+.bar-wrap{background:var(--bg);border-radius:4px;height:22px;overflow:hidden;position:relative}
+.bar-fill{height:100%;border-radius:4px;transition:width 0.4s,background 0.4s}
+.bar-label{position:absolute;top:0;left:10px;right:10px;line-height:22px;font-size:0.78em;color:var(--text);text-shadow:0 1px 2px rgba(0,0,0,0.6)}
+.forms-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:640px){.forms-row{grid-template-columns:1fr}}
+.form-group{margin-bottom:10px}
+.form-group label{display:block;font-size:0.82em;color:var(--text-dim);margin-bottom:4px}
+.form-group input{width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-size:0.9em}
+.form-group input:focus{outline:none;border-color:var(--accent)}
+.btn{background:var(--accent);color:#fff;border:none;border-radius:4px;padding:7px 18px;font-size:0.9em;cursor:pointer}
+.btn:hover{opacity:0.85}
+.msg{font-size:0.82em;margin-top:6px;min-height:1.4em}
+.msg-ok{color:var(--green)}.msg-err{color:var(--red)}
+footer{text-align:center;color:var(--text-dim);font-size:0.78em;padding:12px}
+.auth-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:100}
+.auth-box{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;width:340px}
+.auth-box h3{margin-bottom:12px;color:var(--accent)}
+.auth-box .form-group{margin-bottom:14px}
+.auth-box .msg{margin-bottom:8px}
+.loading{color:var(--text-dim);font-style:italic}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div><h1>DS Gateway 管理面板</h1><div class="meta">版本 <span id="version">-</span> · 运行 <span id="uptime">-</span></div></div>
+    <div class="controls"><select id="interval" title="自动刷新间隔"><option value="5000">5秒</option><option value="10000" selected>10秒</option><option value="30000">30秒</option><option value="0">关闭</option></select><button id="refreshBtn">刷新</button></div>
+  </header>
+
+
+  <div class="card"><h2>总览</h2><div class="stats-grid"><div class="stat-item"><div class="label">状态</div><div class="value" id="status">-</div></div><div class="stat-item"><div class="label">总容量</div><div class="value" id="capacity">-</div></div><div class="stat-item"><div class="label">令牌数</div><div class="value" id="tokenCount">-</div></div><div class="stat-item"><div class="label">会话缓存</div><div class="value" id="sessionCount">-</div></div></div></div>
+  <div class="card"><h2>请求队列</h2><div class="bar-wrap"><div class="bar-fill" id="queueBar" style="width:0%;background:var(--green)"></div><div class="bar-label" id="queueLabel">0 / 100</div></div></div>
+  <div class="card"><h2>令牌池</h2><div style="overflow-x:auto"><table><thead><tr><th>令牌</th><th>视觉</th><th>错误</th><th>活跃/最大</th><th>健康</th><th>操作</th></tr></thead><tbody id="poolBody"><tr><td colspan="6" class="loading">加载中...</td></tr></tbody></table></div></div>
+  <div class="card"><h2>会话缓存</h2><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div id="sessionSummary" style="font-size:0.88em;color:var(--text-dim)">-</div><button class="btn" style="padding:4px 12px;font-size:0.8em;background:var(--red)" onclick="clearSessions()">清空全部</button></div><div style="overflow-x:auto"><table><thead><tr><th>缓存键</th><th>模型</th><th>已用时间</th><th>剩余TTL</th><th>操作</th></tr></thead><tbody id="sessionBody"><tr><td colspan="5" class="loading">加载中...</td></tr></tbody></table></div></div>
+  <div class="card"><h2>账号管理</h2><p style="font-size:0.82em;color:var(--text-dim);margin-bottom:12px">热加载：添加/删除后立即生效</p><div style="overflow-x:auto;margin-bottom:16px"><table><thead><tr><th>邮箱</th><th>令牌</th><th>视觉</th><th>错误</th><th>状态</th><th>操作</th></tr></thead><tbody id="accountBody"><tr><td colspan="6" class="loading">加载中...</td></tr></tbody></table></div><div class="forms-row"><div><h3 style="font-size:0.92em;margin-bottom:8px">添加账号</h3><form id="addAccountForm"><div class="form-group"><label>邮箱</label><input type="email" id="addAccountEmail" placeholder="DeepSeek 账号邮箱" required></div><div class="form-group"><label>密码</label><input type="password" id="addAccountPassword" placeholder="账号密码" required></div><button type="submit" class="btn">添加</button><div class="msg" id="addAccountMsg"></div></form></div><div><h3 style="font-size:0.92em;margin-bottom:8px">添加令牌</h3><form id="addTokenForm"><div class="form-group"><label>令牌字符串</label><input type="text" id="addTokenInput" placeholder="粘贴 DeepSeek 令牌..." required></div><button type="submit" class="btn">添加</button><div class="msg" id="addTokenMsg"></div></form></div></div></div>
+
+
+  <div class="card"><h2>API Key 管理</h2><p style="font-size:0.82em;color:var(--text-dim);margin-bottom:12px">用于模型调用接口鉴权（与管理面板密码独立）</p><div style="overflow-x:auto;margin-bottom:12px"><table><thead><tr><th>Key（脱敏）</th><th>操作</th></tr></thead><tbody id="apikeyBody"><tr><td colspan="2" class="loading">加载中...</td></tr></tbody></table></div><form id="addApikeyForm" style="display:flex;gap:8px;align-items:end"><div class="form-group" style="flex:1;margin-bottom:0"><label>新 API Key</label><input type="text" id="addApikeyInput" placeholder="输入新的 API Key" required></div><button type="submit" class="btn">添加</button></form><div class="msg" id="addApikeyMsg"></div></div>
+  <div class="card"><h2>登录代理</h2><p style="font-size:0.82em;color:var(--text-dim);margin-bottom:12px">仅用于添加账号时登录（绕过 WAF），不影响 API 转发</p><div id="proxyStatus" style="font-size:0.88em;margin-bottom:12px;padding:8px 12px;background:var(--bg);border-radius:4px">加载中...</div><div class="forms-row"><div><h3 style="font-size:0.92em;margin-bottom:8px">手动代理</h3><form id="manualProxyForm"><div class="form-group"><label>代理地址</label><input type="text" id="manualProxyInput" placeholder="ip:port 或 user:pass@ip:port"></div><button type="submit" class="btn">保存</button><button type="button" class="btn" style="background:var(--border);margin-left:6px" onclick="checkManualProxy()">检测</button><div class="msg" id="manualProxyMsg"></div></form></div><div><h3 style="font-size:0.92em;margin-bottom:8px">携趣短效代理</h3><form id="xiequForm"><div class="form-group"><label>API 提取地址</label><input type="text" id="xiequApiInput" placeholder="http://api.xiequ.cn/..."></div><button type="submit" class="btn">保存</button><button type="button" class="btn" style="background:var(--border);margin-left:6px" onclick="testXiequ()">提取测试</button><div class="msg" id="xiequMsg"></div></form></div></div></div>
+  <footer>上次刷新: <span id="lastRefresh">-</span></footer>
+</div>
+<div class="auth-overlay" id="authOverlay" style="display:none"><div class="auth-box"><h3>管理面板登录</h3><p style="font-size:0.85em;color:var(--text-dim);margin-bottom:12px">请输入管理面板密码（ADMIN_PASSWORD）</p><div class="form-group"><label>密码</label><input type="password" id="authKeyInput" placeholder="输入管理密码..."></div><button class="btn" id="authSubmitBtn">确认</button><div class="msg" id="authMsg"></div></div></div>
+
+
+<script>
+const $=id=>document.getElementById(id);let refreshTimer=null;
+function getAdminPwd(){return sessionStorage.getItem('adminPwd')||''}
+function authHeaders(){const p=getAdminPwd();return p?{'Authorization':'Bearer '+p}:{}}
+async function apiFetch(url,options={}){const headers={...authHeaders(),...(options.headers||{})};const res=await fetch(url,{...options,headers});if(res.status===401){sessionStorage.removeItem('adminPwd');$('authOverlay').style.display='flex';throw new Error('unauthorized')}return res}
+function formatUptime(s){const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60),sec=s%60;const p=[];if(d)p.push(d+'天');if(h)p.push(h+'时');if(m)p.push(m+'分');p.push(sec+'秒');return p.join(' ')}
+function formatDuration(s){if(s<60)return s+'秒';if(s<3600)return Math.floor(s/60)+'分'+s%60+'秒';if(s<86400)return Math.floor(s/3600)+'时'+Math.floor(s%3600/60)+'分';return Math.floor(s/86400)+'天'+Math.floor(s%86400/3600)+'时'}
+function healthDot(e,a,m){if(e>=3)return'<span class="dot dot-red"></span>不可用';if(e>=1)return'<span class="dot dot-yellow"></span>异常';if(a>=m)return'<span class="dot dot-yellow"></span>满载';return'<span class="dot dot-green"></span>正常'}
+function visionLabel(v){if(v===true)return'<span style="color:var(--green)">支持</span>';if(v===false)return'<span style="color:var(--text-dim)">不支持</span>';return'<span style="color:var(--yellow)">未知</span>'}
+
+function render(data){
+  $('version').textContent=data.version;$('uptime').textContent=formatUptime(data.uptimeSeconds);
+  $('status').innerHTML='<span class="status-ok">正常</span>';$('capacity').textContent=data.totalCapacity;
+  $('tokenCount').textContent=data.pool.length;$('sessionCount').textContent=data.sessions.count;
+  const q=data.queue.queued,qMax=data.queue.maxQueueSize,pct=Math.min(100,(q/qMax)*100);
+  $('queueBar').style.width=pct+'%';$('queueBar').style.background=pct>80?'var(--red)':pct>50?'var(--yellow)':'var(--green)';
+  $('queueLabel').textContent=q+' / '+qMax;
+  const pb=$('poolBody');
+  if(!data.pool.length){pb.innerHTML='<tr><td colspan="6" style="color:var(--text-dim)">无令牌</td></tr>'}
+  else{pb.innerHTML=data.pool.map(t=>`<tr><td>${t.token}</td><td>${visionLabel(t.visionCapable)}</td><td>${t.errorCount}</td><td>${t.activeRequests}/${t.maxConcurrent}</td><td>${healthDot(t.errorCount,t.activeRequests,t.maxConcurrent)}</td><td><button class="btn" style="padding:3px 10px;font-size:0.8em;background:var(--red)" onclick="removeToken('${t.token.replace('...','')}')">删除</button></td></tr>`).join('')}
+  const ss=data.sessions;$('sessionSummary').textContent=ss.count+'个会话 · TTL:'+formatDuration(ss.ttl);
+  const sb=$('sessionBody');
+  if(!ss.sessions.length){sb.innerHTML='<tr><td colspan="5" style="color:var(--text-dim)">无缓存</td></tr>'}
+  else{sb.innerHTML=ss.sessions.map(s=>{const sty=s.ttlRemainingSeconds<3600?'color:var(--yellow)':'';const exp=s.ttlRemainingSeconds===0?'color:var(--red)':'';return`<tr><td>${s.key}</td><td>${s.modelType}</td><td>${formatDuration(s.ageSeconds)}</td><td style="${exp||sty}">${s.ttlRemainingSeconds===0?'已过期':formatDuration(s.ttlRemainingSeconds)}</td><td><button class="btn" style="padding:3px 10px;font-size:0.8em;background:var(--red)" onclick="deleteSessionByKey('${s.key}')">删除</button></td></tr>`}).join('')}
+  $('lastRefresh').textContent=new Date().toLocaleTimeString();
+}
+
+
+async function fetchStats(){try{const r=await apiFetch('/admin/api/stats');if(!r.ok)throw new Error('HTTP '+r.status);render(await r.json())}catch(e){if(e.message!=='unauthorized')console.error('fetchStats:',e)}}
+function setupRefresh(){if(refreshTimer)clearInterval(refreshTimer);const ms=parseInt($('interval').value);if(ms>0)refreshTimer=setInterval(()=>{fetchStats();fetchAccounts();fetchApiKeys()},ms)}
+$('interval').addEventListener('change',setupRefresh);
+$('refreshBtn').addEventListener('click',fetchStats);
+$('authSubmitBtn').addEventListener('click',()=>{const k=$('authKeyInput').value.trim();if(!k){$('authMsg').className='msg msg-err';$('authMsg').textContent='请输入密码';return}sessionStorage.setItem('adminPwd',k);$('authOverlay').style.display='none';$('authMsg').textContent='';fetchStats();fetchAccounts();fetchApiKeys();fetchProxyConfig()});
+$('authKeyInput').addEventListener('keydown',e=>{if(e.key==='Enter')$('authSubmitBtn').click()});
+
+// Token
+$('addTokenForm').addEventListener('submit',async e=>{e.preventDefault();const t=$('addTokenInput').value.trim(),m=$('addTokenMsg');m.textContent='添加中...';m.className='msg';try{const r=await apiFetch('/admin/api/token/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:t})});const d=await r.json();if(d.success){m.className='msg msg-ok';m.textContent='添加成功！';$('addTokenInput').value='';fetchStats()}else{m.className='msg msg-err';m.textContent=d.error?.message||'失败'}}catch(err){m.className='msg msg-err';m.textContent='请求失败'}});
+async function removeToken(p){if(!confirm('确认删除令牌 '+p+'...？'))return;try{const r=await apiFetch('/admin/api/token/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tokenPrefix:p})});const d=await r.json();if(d.success){fetchStats();fetchAccounts()}else alert(d.message||'失败')}catch(e){alert('请求失败')}}
+
+// Session
+async function deleteSessionByKey(k){if(!confirm('删除会话 '+k+'？'))return;try{const r=await apiFetch('/admin/api/session/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cacheKey:k})});const d=await r.json();if(d.success)fetchStats();else alert(d.message||'失败')}catch(e){alert('请求失败')}}
+async function clearSessions(){if(!confirm('确认清空所有会话缓存？'))return;try{const r=await apiFetch('/admin/api/session/clear',{method:'POST'});const d=await r.json();if(d.success)fetchStats();else alert(d.message||'失败')}catch(e){alert('请求失败')}}
+
+// Account
+$('addAccountForm').addEventListener('submit',async e=>{e.preventDefault();const email=$('addAccountEmail').value.trim(),password=$('addAccountPassword').value,m=$('addAccountMsg');m.textContent='登录中...';m.className='msg';try{const r=await apiFetch('/admin/api/account/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})});const d=await r.json();if(d.success){m.className='msg msg-ok';m.textContent='添加成功！令牌:'+d.token;$('addAccountEmail').value='';$('addAccountPassword').value='';fetchStats();fetchAccounts()}else{m.className='msg msg-err';m.textContent=d.error?.message||'失败'}}catch(err){m.className='msg msg-err';m.textContent='请求失败'}});
+async function removeAccount(email){if(!confirm('确认删除账号 '+email+'？'))return;try{const r=await apiFetch('/admin/api/account/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});const d=await r.json();if(d.success){fetchStats();fetchAccounts()}else alert(d.message||'失败')}catch(e){alert('请求失败')}}
+function renderAccounts(accounts){const b=$('accountBody');if(!accounts||!accounts.length){b.innerHTML='<tr><td colspan="6" style="color:var(--text-dim)">无账号</td></tr>';return}b.innerHTML=accounts.map(a=>{const st=a.dead?'<span class="dot dot-red"></span>不可用':a.errorCount>=1?'<span class="dot dot-yellow"></span>异常':'<span class="dot dot-green"></span>正常';return`<tr><td>${a.email}</td><td>${a.token}</td><td>${visionLabel(a.visionCapable)}</td><td>${a.errorCount}</td><td>${st}</td><td><button class="btn" style="padding:3px 10px;font-size:0.8em;background:var(--red)" onclick="removeAccount('${a.email}')">删除</button></td></tr>`}).join('')}
+async function fetchAccounts(){try{const r=await apiFetch('/admin/api/accounts');if(!r.ok)throw new Error('');const d=await r.json();if(d.success)renderAccounts(d.accounts)}catch(e){if(e.message!=='unauthorized')console.error('fetchAccounts:',e)}}
+
+
+// API Keys
+function renderApiKeys(keys){const b=$('apikeyBody');if(!keys||!keys.length){b.innerHTML='<tr><td colspan="2" style="color:var(--text-dim)">无 API Key（所有接口无需鉴权）</td></tr>';return}b.innerHTML=keys.map(k=>`<tr><td>${k.key}</td><td><button class="btn" style="padding:3px 10px;font-size:0.8em;background:var(--red)" onclick="removeApiKey('${k.fullKey}')">删除</button></td></tr>`).join('')}
+async function fetchApiKeys(){try{const r=await apiFetch('/admin/api/apikeys');if(!r.ok)throw new Error('');const d=await r.json();if(d.success)renderApiKeys(d.keys)}catch(e){if(e.message!=='unauthorized')console.error('fetchApiKeys:',e)}}
+$('addApikeyForm').addEventListener('submit',async e=>{e.preventDefault();const key=$('addApikeyInput').value.trim(),m=$('addApikeyMsg');m.textContent='添加中...';m.className='msg';try{const r=await apiFetch('/admin/api/apikeys/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key})});const d=await r.json();if(d.success){m.className='msg msg-ok';m.textContent=d.message;$('addApikeyInput').value='';fetchApiKeys()}else{m.className='msg msg-err';m.textContent=d.message||'失败'}}catch(err){m.className='msg msg-err';m.textContent='请求失败'}});
+async function removeApiKey(key){if(!confirm('确认删除此 API Key？'))return;try{const r=await apiFetch('/admin/api/apikeys/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key})});const d=await r.json();if(d.success)fetchApiKeys();else alert(d.message||'失败')}catch(e){alert('请求失败')}}
+
+// Proxy
+async function fetchProxyConfig(){try{const r=await apiFetch('/admin/api/proxy');if(!r.ok)throw new Error('');const d=await r.json();if(d.success){$('manualProxyInput').value=d.manualProxy||'';$('xiequApiInput').value=d.xiequApiUrl||'';const parts=[];if(d.xiequApiUrl)parts.push('<span style="color:var(--green)">携趣:已配置</span>');if(d.manualProxy)parts.push('<span style="color:var(--accent)">手动:'+d.manualProxy+'</span>');if(!d.xiequApiUrl&&!d.manualProxy)parts.push('<span style="color:var(--text-dim)">未配置（直连）</span>');$('proxyStatus').innerHTML='状态: '+parts.join(' · ')}}catch(e){}}
+$('manualProxyForm').addEventListener('submit',async e=>{e.preventDefault();const proxyUrl=$('manualProxyInput').value.trim(),m=$('manualProxyMsg');m.textContent='保存中...';m.className='msg';try{const r=await apiFetch('/admin/api/proxy/manual',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({proxyUrl})});const d=await r.json();if(d.success){m.className='msg msg-ok';m.textContent=d.message;fetchProxyConfig()}else{m.className='msg msg-err';m.textContent=d.error?.message||'失败'}}catch(err){m.className='msg msg-err';m.textContent='请求失败'}});
+async function checkManualProxy(){const p=$('manualProxyInput').value.trim(),m=$('manualProxyMsg');if(!p){m.className='msg msg-err';m.textContent='请输入地址';return}m.textContent='检测中...';m.className='msg';try{const r=await apiFetch('/admin/api/proxy/check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({proxyUrl:p})});const d=await r.json();if(d.ok){m.className='msg msg-ok';m.textContent=`可用！延迟:${d.latency}ms${d.note?' ('+d.note+')':''}`}else{m.className='msg msg-err';m.textContent='不可用:'+d.error}}catch(err){m.className='msg msg-err';m.textContent='检测失败'}}
+$('xiequForm').addEventListener('submit',async e=>{e.preventDefault();const apiUrl=$('xiequApiInput').value.trim(),m=$('xiequMsg');m.textContent='保存中...';m.className='msg';try{const r=await apiFetch('/admin/api/proxy/xiequ',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({apiUrl})});const d=await r.json();if(d.success){m.className='msg msg-ok';m.textContent=d.message;fetchProxyConfig()}else{m.className='msg msg-err';m.textContent=d.error?.message||'失败'}}catch(err){m.className='msg msg-err';m.textContent='请求失败'}});
+async function testXiequ(){const m=$('xiequMsg');m.textContent='提取中...';m.className='msg';try{const r=await apiFetch('/admin/api/proxy/xiequ/test',{method:'POST'});const d=await r.json();if(d.success){const c=d.check?.ok?`可用,${d.check.latency}ms`:`不可用:${d.check?.error||''}`;m.className='msg msg-ok';m.textContent=`${d.proxy} (${c})`}else{m.className='msg msg-err';m.textContent=d.error?.message||'提取失败'}}catch(err){m.className='msg msg-err';m.textContent='请求失败'}}
+
+// Init
+fetchStats();fetchAccounts();fetchApiKeys();fetchProxyConfig();setupRefresh();
+</script>
+</body>
+</html>
